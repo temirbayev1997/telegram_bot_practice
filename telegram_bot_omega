@@ -1,0 +1,43 @@
+import logging
+import io
+import requests
+from PIL import Image
+from aiogram import Bot, Dispatcher, types
+from aiogram.types import InputFile
+from aiogram.utils import executor
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+
+API_TOKEN = 'token'
+
+logging.basicConfig(level=logging.INFO)
+
+bot = Bot(token=API_TOKEN)
+dp = Dispatcher(bot)
+
+@dp.message_handler(commands=['start'])
+async def start(message: types.Message):
+    await message.answer("Привет! Я бот для конвертации изображений в PDF. Напиши мне ссылку на изображение.")
+
+@dp.message_handler(content_types=types.ContentType.TEXT)
+async def handle_text(message: types.Message):
+    if message.entities and message.entities[0].type == 'url':
+        url = message.text
+        try: 
+            response = requests.get(url)
+            img = Image.open(io.BytesIO(response.content))
+            pdf_file = io.BytesIO()
+            c = canvas.Canvas(pdf_file, pagesize=letter)
+            c.drawInlineImage(img, 0, 0, width=letter[0], height=letter[1])
+            c.save()
+            pdf_file.seek(0)
+            await bot.send_document(message.chat.id, InputFile(pdf_file, filename='photo.pdf'))
+        except Exception as e:
+            logging.error(f"Ошибка загрузки изображения: {e}")
+            await message.answer("Произошла ошибка при загрузке изображения.")
+    else:
+        await message.answer("Пожалуйста, отправьте ссылку на изображение.")
+
+
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)
